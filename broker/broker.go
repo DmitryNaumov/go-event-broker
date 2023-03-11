@@ -6,6 +6,10 @@ type EventBroker struct {
 	subscribers map[reflect.Type]*list
 }
 
+type Subscriber interface {
+	Handler() (reflect.Type, func(any))
+}
+
 type list struct {
 	v []func(any)
 }
@@ -18,7 +22,18 @@ func New() *EventBroker {
 	return &EventBroker{subscribers: make(map[reflect.Type]*list)}
 }
 
-func Subscribe[T any](broker *EventBroker, handler func(event T)) {
+func (broker *EventBroker) Subscribe(subscriber Subscriber) {
+	key, handler := subscriber.Handler()
+
+	l, ok := broker.subscribers[key]
+	if !ok {
+		l = &list{}
+		broker.subscribers[key] = l
+	}
+	l.append(handler)
+}
+
+func SubscribeFunc[T any](broker *EventBroker, handler func(event T)) {
 	key := getKey[T]()
 
 	l, ok := broker.subscribers[key]

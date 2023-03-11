@@ -2,25 +2,39 @@ package main
 
 import (
 	"example/broker"
-	"fmt"
+	"example/events"
+	"example/subscribers"
+
+	"go.uber.org/fx"
 )
 
-type UserRegistered struct {
-	Name string
-}
-
 func main() {
-	b := broker.New()
-	broker.Subscribe(b, WelcomeUser)
-	broker.Subscribe(b, SendInvoice)
 
-	broker.Publish(b, UserRegistered{"Bob"})
+	fx.New(
+		fx.Provide(
+			broker.New,
+			asSubscriber(subscribers.NewInvoicer),
+			asSubscriber(subscribers.NewWelcomer),
+		),
+		fx.Invoke(fx.Annotate(registerSubscribers, fx.ParamTags(`group:"handlers"`))),
+		fx.Invoke(run),
+	).Run()
 }
 
-func WelcomeUser(event UserRegistered) {
-	fmt.Printf("Hello, %v\n", event.Name)
+func registerSubscribers(list []broker.Subscriber, b *broker.EventBroker) {
+	for _, v := range list {
+		b.Subscribe(v)
+	}
 }
 
-func SendInvoice(event UserRegistered) {
-	fmt.Printf("Sending invoice to %v\n", event.Name)
+func run(b *broker.EventBroker) {
+	broker.Publish(b, events.UserRegistered{"Bob"})
+}
+
+func asSubscriber(f any) any {
+	return fx.Annotate(
+		f,
+		fx.As(new(broker.Subscriber)),
+		fx.ResultTags(`group:"handlers"`),
+	)
 }
